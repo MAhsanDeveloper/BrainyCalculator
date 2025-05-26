@@ -44,8 +44,3 @@ git clone https://github.com/mahsandeveloper/scientific-calculator.git
 cd scientific-calculator
 npm install
 npm start
-
----
-
-📄 License
-This project is open-source and available under the MIT License.
