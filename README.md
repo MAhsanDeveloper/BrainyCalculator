@@ -40,7 +40,7 @@ All mathematical evaluations are handled using **math.js**, ensuring precision a
 ## 📦 Installation & Running Locally
 
 ```bash
-git clone https://github.com/mahsandeveloper/scientific-calculator.git
+git clone https://github.com/MAhsanDev/brainy-calculator.git
 cd scientific-calculator
 npm install
 npm start
