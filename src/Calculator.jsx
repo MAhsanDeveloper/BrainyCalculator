@@ -1,6 +1,8 @@
 /* eslint-disable no-unused-vars */
-import React, { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { evaluate, pi } from "mathjs";
+
+const MAX_HISTORY = 15;
 
 const Calculator = () => {
   // State variables for input, memory storage, angle unit (degrees/radians), and shift mode
@@ -8,9 +10,33 @@ const Calculator = () => {
   const [memory, setMemory] = useState(null);
   const [angleUnit, setAngleUnit] = useState("deg");
   const [shift, setShift] = useState(false);
+  const [theme, setTheme] = useState("dark");
+  const [history, setHistory] = useState(() => {
+    const stored = localStorage.getItem("calc_history");
+    return stored ? JSON.parse(stored) : [];
+  });
+  const [showHistory, setShowHistory] = useState(false);
+
   const inputRef = useRef(null); // Reference to input field for cursor control
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent); // mobile keyboard wont show
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme) setTheme(savedTheme);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("calc_history", JSON.stringify(history));
+  }, [history]);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+  };
+
+  const toggleHistory = () => setShowHistory((prev) => !prev);
 
   // Handles button clicks, inserting values or functions into the input field
   const handleClick = (value, isFunc = false) => {
@@ -37,12 +63,17 @@ const Calculator = () => {
       if (lastNumber.includes(".")) return; // Prevent adding another "."
     }
 
+    // Prevent consecutive operator signs
+    if (["+", "-", "*", "/"].includes(value)) {
+      const lastChar = input.slice(cursorPos - 1, cursorPos);
+      if (["+", "-", "*", "/"].includes(lastChar)) return;
+    }
+
     if (value === "^2" || value === "^3") {
-      newValue = value;
-      newCursorPos = cursorPos + newValue.length; // Ensure cursor moves right after the exponent
+      newCursorPos = cursorPos + value.length;
     } else if (value === "^") {
       newValue = "^()";
-      newCursorPos = cursorPos + 2; // Moves cursor inside the parentheses for exponent entry
+      newCursorPos = cursorPos + 2;
     }
 
     setInput(
@@ -77,8 +108,17 @@ const Calculator = () => {
     setAngleUnit((prev) => (prev === "deg" ? "rad" : "deg"));
   const toggleShift = () => setShift((prev) => !prev);
 
+  const addToHistory = (expr) => {
+    setHistory((prev) => {
+      const updated = [expr, ...prev.filter((item) => item !== expr)].slice(
+        0,
+        MAX_HISTORY
+      );
+      return updated;
+    });
+  };
+
   const handleCalculate = () => {
-    // Clear error if there's one before calculation
     if (input === "Error") {
       setInput("");
     }
@@ -90,60 +130,107 @@ const Calculator = () => {
         .replace(/csc\(/g, "1/sin(")
         .replace(/log\(/g, "log10(")
         .replace(/ln\(/g, "log(")
-        .replace(/(\d+)!/g, "factorial($1)") // Convert n! to factorial(n)
-        .replace(/π/g, "pi")
-        .replace(/cot\(/g, "1/tan(")
-        .replace(/sec\(/g, "1/cos(")
-        .replace(/csc\(/g, "1/sin(");
+        .replace(/(\d+)!/g, "factorial($1)")
+        .replace(/π/g, "pi");
 
       if (angleUnit === "deg") {
         expression = expression.replace(
           /(sin|cos|tan)\(([^)]+)\)/g,
-          (match, func, angle) => {
-            return `${func}(${angle} * pi / 180)`;
-          }
+          (match, func, angle) => `${func}(${angle} * pi / 180)`
         );
       }
 
       const result = evaluate(expression).toString();
+      addToHistory(input);
       setInput(result);
 
-      // keep cursor at the end after evaluating a result
-
-      // React state updates (setInput(...)) do not happen immediately—they are asynchronous.
-
-      // If we try to set selectionStart and selectionEnd immediately after setInput, React might not have updated the input value yet.
-
-      // Wrapping it in setTimeout(..., 10) ensures that React has finished updating the input before we move the cursor.
-      //If you remove setTimeout, the cursor might jump to the wrong position or stay at the end because React’s update is not instant.
       setTimeout(() => {
         inputRef.current.selectionStart = inputRef.current.selectionEnd =
           result.length;
         inputRef.current.focus();
       }, 10);
-    } catch (error) {
+    } catch {
       setInput("Error");
     }
   };
 
-  return (
-    <section className="w-full mx-1.5  max-w-fit p-5 rounded-2xl bg-gray-800 flex flex-col text-center shadow-2xl">
-     <input
-  ref={inputRef}
-  value={input}
-  onClick={() => inputRef.current.focus()}
-  onChange={(e) => {
-    // Prevent manual typing (you can log or ignore)
-    e.preventDefault();
-  }}
-  className="w-full h-16 bg-gray-900 text-white text-xl text-right p-3 rounded mb-3 overflow-auto caret-white"
-  onKeyDown={(e) => e.preventDefault()} // prevent backspace or typing
-  inputMode="none" // tells mobile not to show keyboard
-  autoComplete="off"
-  autoCorrect="off"
-  spellCheck="false"
-/>
+  const themeClasses =
+    theme === "dark"
+      ? {
+          bg: "bg-gray-800",
+          btn: "bg-gray-600",
+          input: "bg-gray-900 text-white",
+          text: "text-white",
+        }
+      : {
+          bg: "bg-white",
+          btn: "bg-gray-200",
+          input: "bg-gray-100 text-black",
+          text: "text-black",
+        };
 
+  return (
+    <section
+      className={`w-full mx-1.5  max-w-fit p-5 rounded-2xl bg-gray-800 flex flex-col text-center shadow-2xl ${themeClasses.bg}`}
+    >
+      <div className="flex justify-between items-center mb-3">
+        <h1 className={`text-xl font-bold ${themeClasses.text}`}>Calculator</h1>
+        <div className="space-x-2">
+          <button
+            onClick={toggleTheme}
+            className="text-sm px-3 py-1 rounded bg-indigo-500 text-white"
+          >
+            {theme === "dark" ? "Light Mode" : "Dark Mode"}
+          </button>
+          <button
+            onClick={toggleHistory}
+            className="text-sm px-3 py-1 rounded bg-blue-500 text-white"
+          >
+            {showHistory ? "Hide History" : "Show History"}
+          </button>
+        </div>
+      </div>
+
+      <input
+        ref={inputRef}
+        value={input}
+        onClick={() => inputRef.current.focus()}
+        onChange={(e) => {
+          // Prevent manual typing (you can log or ignore)
+          e.preventDefault();
+        }}
+        className={`w-full h-16 bg-gray-900 text-white text-xl text-right p-3 rounded mb-3 overflow-auto caret-white ${themeClasses.input}`}
+        onKeyDown={(e) => e.preventDefault()} // prevent backspace or typing
+        inputMode="none" // tells mobile not to show keyboard
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck="false"
+      />
+       
+      {/* HISTORY PANEL */}
+      {showHistory && (
+        <aside
+          className={`absolute top-0 right-0 w-[15%] rounded-l-2xl h-full p-4 overflow-auto z-50 ${themeClasses.bg} shadow-lg`}
+        >
+          <h2 className={`text-sm font-bold mb-2 ${themeClasses.text}`}>
+            History
+          </h2>
+          <ul className="space-y-1">
+            {history.map((item, idx) => (
+              <li key={idx}>
+                <button
+                  className={`text-left w-full hover:underline ${
+                    theme === "dark" ? "text-white" : "text-black"
+                  }`}
+                  onClick={() => setInput(item)}
+                >
+                  {item}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      )}
 
       <div className="grid grid-cols-6 gap-2">
         <button
